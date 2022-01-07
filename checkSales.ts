@@ -47,7 +47,24 @@ const buildMessage = (sale: any) => (
     .setFooter('Sold on OpenSea', 'https://files.readme.io/566c72b-opensea-logomark-full-colored.png')
 )
 
+const sortitionAddress = "0xa9a57f7d2A54C1E172a7dC546fEE6e03afdD28E2";
+const sortitionABI = [
+  "event Nominated(uint256 indexed termNumber, address nominator, uint256 pixels)"
+];
+
+async function sortitionLog() {
+  const provider = new ethers.providers.JsonRpcProvider("https://rpc.flashbots.net");
+  //const signer = provider.getSigner()
+  console.log(await provider.getBlockNumber())
+
+  const sortitionContract = new ethers.Contract(sortitionAddress, sortitionABI, provider);
+  const filter = sortitionContract.filters.Nominated();
+  console.log(await sortitionContract.queryFilter(filter));
+}
+
 async function main() {
+  await sortitionLog()
+  return ""
   const channel = await discordSetup();
   const seconds = process.env.SECONDS ? parseInt(process.env.SECONDS) : 3_600;
   const hoursAgo = (Math.round(new Date().getTime() / 1000) - (seconds)); // in the last hour, run hourly?
