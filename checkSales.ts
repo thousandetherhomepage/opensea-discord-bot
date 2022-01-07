@@ -47,25 +47,31 @@ const buildMessage = (sale: any) => (
     .setFooter('Sold on OpenSea', 'https://files.readme.io/566c72b-opensea-logomark-full-colored.png')
 )
 
-const sortitionAddress = "0xa9a57f7d2A54C1E172a7dC546fEE6e03afdD28E2";
+//mainnet
+// const sortitionAddress = "0xa9a57f7d2A54C1E172a7dC546fEE6e03afdD28E2";
+// rinkeby
+const sortitionAddress = "0xA194a30C201523631E29EFf80718D72994eFa1d6";
 const sortitionABI = [
   "event Nominated(uint256 indexed termNumber, address nominator, uint256 pixels)",
   "function nominatedTokens(uint256) view returns (uint256)",
   "function termExpires() view returns (uint256)",
   "function getNominatedToken(uint256) view returns (uint256)",
   "function getAdPixels(uint256) view returns (uint256)",
+  "function getAdOwner(uint256) view returns (address)"
+
 ];
 
 async function sortitionLog(hoursAgo: number) {
   const sinceBlockLowerbound = hoursAgo * 60 * 6; // ETH blocks are mined every 12-16s, so let's do 60/10 = 6 as an upper bound we'll discard excess events.
   const sinceTimestamp = Math.floor((+new Date()) / 1000) - (hoursAgo * 60 * 60);
 
-  const provider = new ethers.providers.JsonRpcProvider("https://rpc.flashbots.net");
+  const provider = new ethers.providers.JsonRpcProvider("https://rinkeby.infura.io/v3/REDACTED");
 
 
+  console.log(await provider.getBlockNumber());
   const sortitionContract = new ethers.Contract(sortitionAddress, sortitionABI, provider);
 
-  console.log("Current term expires on", new Date((await sortitionContract.termExpires()).toNumber()*1000));
+  console.log("Current term expires on", new Date((await sortitionContract.termExpires()).toNumber() * 1000));
 
   const filter = sortitionContract.filters.Nominated();
   const events = await sortitionContract.queryFilter(filter, -sinceBlockLowerbound, "latest")
@@ -88,22 +94,28 @@ async function sortitionLog(hoursAgo: number) {
   // FIXME: Below is not tested at all
 
   // Loop over nominations and tally
-  const nominations = {};
-  for (let i=0;;i++) {
+  let nominations = {};
+  for (let i = 0; ; i++) {
     try {
-      const n = await sortitionContract.nominatedTokens(0);
-      nominations[n.toString()] = 0;
-    } catch(err) {
+      const tokenId = (await sortitionContract.nominatedTokens(i)).toNumber();
+      const nominatedTokenId = (await sortitionContract.getNominatedToken(tokenId)).toNumber();
+      const owner = (await sortitionContract.getAdOwner(nominatedTokenId)).toString();
+      const pixels = (await sortitionContract.getAdPixels(tokenId.toString())).toNumber();
+      console.log(tokenId, "nominated", nominatedTokenId, "for", pixels, "pixels");
+      if (owner in nominations) {
+        nominations[owner] += pixels;
+      }
+      else {
+        nominations[owner] = pixels;
+      }
+    } catch (err) {
+      console.warn(err)
       break
     }
   }
 
-  for (const tokenId in nominations) {
-    console.debug("tokenId", tokenId);
-    const nominatedTokenId = await sortitionContract.getNominatedToken(tokenId);
-    const pixels = await sortitionContract.getAdPixels(tokenId.toString());
-    console.log(tokenId, "nominated", nominatedTokenId.toString(), "for", pixels.toString(), "pixels");
-    // TODO: Accumulate these indexed by nominatedTokenId before printing? Or do we prefer a stream?
+  for (const address in nominations) {
+    console.log(address, "nominated for", nominations[address], "pixels");
   }
 
   // TODO: Build somekind of datastructure with all of the above to return into a formatted discord thing?
