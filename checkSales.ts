@@ -50,16 +50,23 @@ const buildMessage = (sale: any) => (
 const sortitionAddress = "0xa9a57f7d2A54C1E172a7dC546fEE6e03afdD28E2";
 const sortitionABI = [
   "event Nominated(uint256 indexed termNumber, address nominator, uint256 pixels)",
-  "function nominatedTokens() view returns (uint256[])",
+  "function nominatedTokens(uint256) view returns (uint256)",
+  "function termExpires() view returns (uint256)",
+  "function getNominatedToken(uint256) view returns (uint256)",
+  "function getAdPixels(uint256) view returns (uint256)",
 ];
 
 async function sortitionLog(hoursAgo: number) {
   const sinceBlockLowerbound = hoursAgo * 60 * 6; // ETH blocks are mined every 12-16s, so let's do 60/10 = 6 as an upper bound we'll discard excess events.
-  const sinceTimestamp = Math.round((+new Date()) / 1000) - (hoursAgo * 60 * 60);
+  const sinceTimestamp = Math.floor((+new Date()) / 1000) - (hoursAgo * 60 * 60);
 
   const provider = new ethers.providers.JsonRpcProvider("https://rpc.flashbots.net");
 
+
   const sortitionContract = new ethers.Contract(sortitionAddress, sortitionABI, provider);
+
+  console.log("Current term expires on", new Date((await sortitionContract.termExpires()).toNumber()*1000));
+
   const filter = sortitionContract.filters.Nominated();
   const events = await sortitionContract.queryFilter(filter, -sinceBlockLowerbound, "latest")
 
@@ -78,18 +85,37 @@ async function sortitionLog(hoursAgo: number) {
     console.log("Address", evt.args.nominator, "nominated", evt.args.pixels.toString(), "pixels for term", evt.args.termNumber.toString());
   }
 
-  // TODO: Loop over nominations and tally
-  // const nominations = await sortitionContract.nominatedTokens(0);
-  // console.log(nominations);
+  // FIXME: Below is not tested at all
+
+  // Loop over nominations and tally
+  const nominations = {};
+  for (let i=0;;i++) {
+    try {
+      const n = await sortitionContract.nominatedTokens(0);
+      nominations[n.toString()] = 0;
+    } catch(err) {
+      break
+    }
+  }
+
+  for (const tokenId in nominations) {
+    console.debug("tokenId", tokenId);
+    const nominatedTokenId = await sortitionContract.getNominatedToken(tokenId);
+    const pixels = await sortitionContract.getAdPixels(tokenId.toString());
+    console.log(tokenId, "nominated", nominatedTokenId.toString(), "for", pixels.toString(), "pixels");
+    // TODO: Accumulate these indexed by nominatedTokenId before printing? Or do we prefer a stream?
+  }
+
+  // TODO: Build somekind of datastructure with all of the above to return into a formatted discord thing?
 }
 
 async function main() {
   const channel = await discordSetup();
   const seconds = process.env.SECONDS ? parseInt(process.env.SECONDS) : 3_600;
-  const hoursAgo = (Math.round(new Date().getTime() / 1000) - (seconds)); // in the last hour, run hourly?
+  const hoursAgo = (Math.floor(new Date().getTime() / 1000) - (seconds)); // in the last hour, run hourly?
 
   //await sortitionLog(hoursAgo);
-  await sortitionLog(24 * 7 * 6 * 2); // 1 elections ago
+  await sortitionLog(24 * 7 * 6 * 1); // 1 elections ago
   throw "XXX: Debugging"
 
   const params = new URLSearchParams({
