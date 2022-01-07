@@ -49,7 +49,8 @@ const buildMessage = (sale: any) => (
 
 const sortitionAddress = "0xa9a57f7d2A54C1E172a7dC546fEE6e03afdD28E2";
 const sortitionABI = [
-  "event Nominated(uint256 indexed termNumber, address nominator, uint256 pixels)"
+  "event Nominated(uint256 indexed termNumber, address nominator, uint256 pixels)",
+  "function nominatedTokens() view returns (uint256[])",
 ];
 
 async function sortitionLog() {
@@ -58,8 +59,11 @@ async function sortitionLog() {
   console.log(await provider.getBlockNumber())
 
   const sortitionContract = new ethers.Contract(sortitionAddress, sortitionABI, provider);
-  const filter = sortitionContract.filters.Nominated();
-  console.log(await sortitionContract.queryFilter(filter));
+  //const filter = sortitionContract.filters.Nominated();
+  //console.log(await sortitionContract.queryFilter(filter));
+
+  const nominations = await sortitionContract.nominatedTokens();
+  console.log(nominations);
 }
 
 async function main() {
