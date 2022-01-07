@@ -53,25 +53,44 @@ const sortitionABI = [
   "function nominatedTokens() view returns (uint256[])",
 ];
 
-async function sortitionLog() {
+async function sortitionLog(hoursAgo: number) {
+  const sinceBlockLowerbound = hoursAgo * 60 * 6; // ETH blocks are mined every 12-16s, so let's do 60/10 = 6 as an upper bound we'll discard excess events.
+  const sinceTimestamp = Math.round((+new Date()) / 1000) - (hoursAgo * 60 * 60);
+
   const provider = new ethers.providers.JsonRpcProvider("https://rpc.flashbots.net");
-  //const signer = provider.getSigner()
-  console.log(await provider.getBlockNumber())
 
   const sortitionContract = new ethers.Contract(sortitionAddress, sortitionABI, provider);
-  //const filter = sortitionContract.filters.Nominated();
-  //console.log(await sortitionContract.queryFilter(filter));
+  const filter = sortitionContract.filters.Nominated();
+  const events = await sortitionContract.queryFilter(filter, -sinceBlockLowerbound, "latest")
 
-  const nominations = await sortitionContract.nominatedTokens();
-  console.log(nominations);
+  console.debug("Found", events.length, "events in the last", sinceBlockLowerbound, "blocks");
+
+  // Discard events until we find ones that are within our time window
+  while (events.length > 0) {
+    const b = await events[0].getBlock();
+    if (b.timestamp >= sinceTimestamp) break;
+
+    console.debug("Discarding event", b.timestamp, events[0]);
+    events.shift();
+  };
+
+  for (const evt of events) {
+    console.log("Address", evt.args.nominator, "nominated", evt.args.pixels.toString(), "pixels for term", evt.args.termNumber.toString());
+  }
+
+  // TODO: Loop over nominations and tally
+  // const nominations = await sortitionContract.nominatedTokens(0);
+  // console.log(nominations);
 }
 
 async function main() {
-  await sortitionLog()
-  return ""
   const channel = await discordSetup();
   const seconds = process.env.SECONDS ? parseInt(process.env.SECONDS) : 3_600;
   const hoursAgo = (Math.round(new Date().getTime() / 1000) - (seconds)); // in the last hour, run hourly?
+
+  //await sortitionLog(hoursAgo);
+  await sortitionLog(24 * 7 * 6 * 2); // 1 elections ago
+  throw "XXX: Debugging"
 
   const params = new URLSearchParams({
     offset: '0',
