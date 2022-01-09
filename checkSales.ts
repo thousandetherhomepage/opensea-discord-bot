@@ -47,10 +47,89 @@ const buildMessage = (sale: any) => (
     .setFooter('Sold on OpenSea', 'https://files.readme.io/566c72b-opensea-logomark-full-colored.png')
 )
 
+//mainnet
+// const sortitionAddress = "0xa9a57f7d2A54C1E172a7dC546fEE6e03afdD28E2";
+// rinkeby
+const sortitionAddress = "0xA194a30C201523631E29EFf80718D72994eFa1d6";
+const sortitionABI = [
+  "event Nominated(uint256 indexed termNumber, address nominator, uint256 pixels)",
+  "function nominatedTokens(uint256) view returns (uint256)",
+  "function termExpires() view returns (uint256)",
+  "function getNominatedToken(uint256) view returns (uint256)",
+  "function getAdPixels(uint256) view returns (uint256)",
+  "function getAdOwner(uint256) view returns (address)"
+
+];
+
+async function sortitionLog(hoursAgo: number) {
+  const sinceBlockLowerbound = hoursAgo * 60 * 6; // ETH blocks are mined every 12-16s, so let's do 60/10 = 6 as an upper bound we'll discard excess events.
+  const sinceTimestamp = Math.floor((+new Date()) / 1000) - (hoursAgo * 60 * 60);
+
+  const INFURA_API_KEY = process.env['INFURA_API_KEY'];
+  if (INFURA_API_KEY===undefined) throw "Missing $INFURA_API_KEY";
+  const provider = new ethers.providers.JsonRpcProvider("https://rinkeby.infura.io/v3/" + INFURA_API_KEY);
+
+  console.log(await provider.getBlockNumber());
+  const sortitionContract = new ethers.Contract(sortitionAddress, sortitionABI, provider);
+
+  console.log("Current term expires on", new Date((await sortitionContract.termExpires()).toNumber() * 1000));
+
+  const filter = sortitionContract.filters.Nominated();
+  const events = await sortitionContract.queryFilter(filter, -sinceBlockLowerbound, "latest")
+
+  console.debug("Found", events.length, "events in the last", sinceBlockLowerbound, "blocks");
+
+  // Discard events until we find ones that are within our time window
+  while (events.length > 0) {
+    const b = await events[0].getBlock();
+    if (b.timestamp >= sinceTimestamp) break;
+
+    console.debug("Discarding event", b.timestamp, events[0]);
+    events.shift();
+  };
+
+  for (const evt of events) {
+    console.log("Address", evt.args.nominator, "nominated", evt.args.pixels.toString(), "pixels for term", evt.args.termNumber.toString());
+  }
+
+  // FIXME: Below is not tested at all
+
+  // Loop over nominations and tally
+  let nominations = {};
+  for (let i = 0; ; i++) {
+    try {
+      const tokenId = (await sortitionContract.nominatedTokens(i)).toNumber();
+      const nominatedTokenId = (await sortitionContract.getNominatedToken(tokenId)).toNumber();
+      const owner = (await sortitionContract.getAdOwner(nominatedTokenId)).toString();
+      const pixels = (await sortitionContract.getAdPixels(tokenId.toString())).toNumber();
+      console.log(tokenId, "nominated", nominatedTokenId, "for", pixels, "pixels");
+      if (owner in nominations) {
+        nominations[owner] += pixels;
+      }
+      else {
+        nominations[owner] = pixels;
+      }
+    } catch (err) {
+      // We don't know the number of nominated slots ahead of time, so we bail once the incremental index access fails
+      break
+    }
+  }
+
+  for (const address in nominations) {
+    console.log(address, "nominated for", nominations[address], "pixels");
+  }
+
+  // TODO: Build somekind of datastructure with all of the above to return into a formatted discord thing?
+}
+
 async function main() {
   const channel = await discordSetup();
   const seconds = process.env.SECONDS ? parseInt(process.env.SECONDS) : 3_600;
-  const hoursAgo = (Math.round(new Date().getTime() / 1000) - (seconds)); // in the last hour, run hourly?
+  const hoursAgo = (Math.floor(new Date().getTime() / 1000) - (seconds)); // in the last hour, run hourly?
+
+  //await sortitionLog(hoursAgo);
+  await sortitionLog(24 * 7 * 6 * 1); // 1 elections ago
+  throw "XXX: Debugging"
 
   const params = new URLSearchParams({
     offset: '0',
