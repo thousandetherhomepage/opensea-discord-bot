@@ -65,8 +65,9 @@ async function sortitionLog(hoursAgo: number) {
   const sinceBlockLowerbound = hoursAgo * 60 * 6; // ETH blocks are mined every 12-16s, so let's do 60/10 = 6 as an upper bound we'll discard excess events.
   const sinceTimestamp = Math.floor((+new Date()) / 1000) - (hoursAgo * 60 * 60);
 
-  const provider = new ethers.providers.JsonRpcProvider("https://rinkeby.infura.io/v3/REDACTED");
-
+  const INFURA_API_KEY = process.env['INFURA_API_KEY'];
+  if (INFURA_API_KEY===undefined) throw "Missing $INFURA_API_KEY";
+  const provider = new ethers.providers.JsonRpcProvider("https://rinkeby.infura.io/v3/" + INFURA_API_KEY);
 
   console.log(await provider.getBlockNumber());
   const sortitionContract = new ethers.Contract(sortitionAddress, sortitionABI, provider);
@@ -109,7 +110,7 @@ async function sortitionLog(hoursAgo: number) {
         nominations[owner] = pixels;
       }
     } catch (err) {
-      console.warn(err)
+      // We don't know the number of nominated slots ahead of time, so we bail once the incremental index access fails
       break
     }
   }
