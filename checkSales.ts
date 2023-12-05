@@ -106,7 +106,7 @@ async function main() {
     let latestSaleTimestamp: number;
     const promises = [];
     for (const sale of r.asset_events) {
-      const ts = sale.start_date * 1000; // Fix their broken ISO UTC string (otherwise parses as local timezone)
+      const ts = sale.closing_date * 1000;
       if (latestSaleTimestamp === undefined) {
         latestSaleTimestamp = ts + 1;
       }
