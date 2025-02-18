@@ -20,7 +20,7 @@ jobs:
       id: date
       run: echo "::set-output name=date::$(date +'%s')"
 
-    - uses: actions/cache@v2
+    - uses: actions/cache@v4
       with:
         path: last_synced
         key: last_synced-${{ steps.date.outputs.date }}
