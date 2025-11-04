@@ -73,7 +73,8 @@ async function main() {
   }
 
   const params = new URLSearchParams({
-    event_type: 'sale'
+    // sale is the default event type, no need to specify (was giving errors for a while)
+    //event_type: 'sale'
     // Note: OpenSea no longer supports occurred_after, so we need to manually prune
   })
 
